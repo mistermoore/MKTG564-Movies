@@ -48,17 +48,14 @@ Column definitions
 |vote_average|Numeric|Average score on IMDB|
 |vote_count|Numeric|Number of votes from IMDB users|
 
-#Explore Movies Data
+#Format and Clean Up Movies Data
 ```{r}
 library(ggplot2)
 library(lubridate)
 library(tidyr)
-#Create backup copy
+library(stringr)
 
-movies.data = movies[!is.na(movies$release_date) 
-                     &!is.na(movies$revenue) 
-                     &!is.na(movies$budget),]
-
+movies.data = movies
 
 #Convert Data Types As Necessary
 movies.data$adult = as.logical(movies.data$adult)
@@ -73,16 +70,32 @@ movies.data$genres = as.character(movies.data$genres)
 movies.data$genres = gsub("\\[|\\]","",movies.data$genres)
 movies.data$genres = gsub("\\{|\\}|'id': \\d+, 'name': |\\ \\{","",movies.data$genres)
 movies.data$genres = gsub("'","",movies.data$genres)
-movies.data = separate(movies.data, genres, into = paste("Genre", 1:8, sep='_'), sep=',')
+movies.data = separate(movies.data, genres, into = paste("Genre", 1:10, sep='_'), sep=',')
 
 #Transform List of Production Companies into fields
 movies.data$production_companies = gsub("\\[|\\]","",movies.data$production_companies)
 movies.data$production_companies = gsub("\\{'name': |, 'id': \\d+\\}| \\{'name': ","",movies.data$production_companies)
 movies.data$production_companies = gsub("'","",movies.data$production_companies)
-movies.data = separate(movies.data, production_companies, into = paste("Production_Company", 1:26, sep='_'), sep=',')
+movies.data = separate(movies.data, production_companies, into = paste("Production_Company", 1:27, sep='_'), sep=',')
+
+#Transform List of Production Countries into fields
+movies.data$production_countries = gsub("\\[|\\]","",movies.data$production_countries)
+movies.data$production_countries = gsub("\\{'iso_\\d+_\\d+': '\\D{2}', 'name': |\\}","",movies.data$production_countries)
+movies.data$production_countries = gsub("'","",movies.data$production_countries)
+movies.data = separate(movies.data, production_countries, into = paste("Production_Countries", 1:26, sep='_'), sep=',')
+
+#Transform List of Spoken Languages into fields
+movies.data$spoken_languages = gsub("\\[|\\]","",movies.data$spoken_languages)
+movies.data$spoken_languages = gsub("\\{|\\}|'iso_\\d+_\\d+': '\\D{2}', 'name': ","",movies.data$spoken_languages)
+movies.data$spoken_languages = gsub("'","",movies.data$spoken_languages)
+movies.data = separate(movies.data, spoken_languages, into = paste("Spoken_Language", 1:20, sep='_'), sep=',')
+
+#Transform Collection
+movies.data$belongs_to_collection = str_extract_all(movies.data$belongs_to_collection,"(?<='name': ')(.*)(?=', 'poster_path)", simplify = TRUE)
 
 
 #Add New Fields
 movies.data$profit = movies.data$revenue - movies.data$budget
+
 
 ```
