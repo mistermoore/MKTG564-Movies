@@ -52,6 +52,7 @@ Column definitions
 ```{r}
 library(lubridate)
 library(stringr)
+library(tidyr)
 
 movies.data = movies
 
@@ -95,7 +96,6 @@ movies.data$belongs_to_collection = str_extract_all(movies.data$belongs_to_colle
 #Add New Fields
 movies.data$profit = movies.data$revenue - movies.data$budget
 
-
 ```
 #Describe Credits Data Set
 ```{r}
@@ -133,13 +133,20 @@ credits.data = separate(credits.data, screenplay, into = paste("Screenplay", 1:3
 credits.data$writer = str_extract_all(credits.data$crew,"(?<='Writer', 'name': ')(.*?)(?=', 'profile_path':)",simplify = FALSE)
 credits.data$writer = gsub("character\\(0|c\\(|\\)|\\\"","",credits.data$writer)
 credits.data = separate(credits.data, writer, into = paste("Writer", 1:3, sep='_'), sep=',')
-
 #Convert Blank Cells to NA
+
 empty_as_na <- function(x){
     if("factor" %in% class(x)) x <- as.character(x) ## since ifelse wont work with factors
     ifelse(as.character(x)!="", x, NA)
 }
 
-credits.data = credits.data %>% mutate_each(funs(empty_as_na)) 
+#Reformat Blanks
+credits.data = credits.data %>% mutate_all(funs(empty_as_na)) 
 
+```
+
+```{r}
+#Output data
+write.csv(movies.data, '../Data/Processed Data/movies_data.csv')
+write.csv(credits.data, '../Data/Processed Data/credits_data.csv')
 ```

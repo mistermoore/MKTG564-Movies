@@ -1,0 +1,101 @@
+---
+title: "Group Project - Descriptive Analysis"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Load Data
+```{r}
+movies.data = read.csv('../Data/Processed Data/movies_data.csv')
+credits.data = read.csv('../Data/Processed Data/credits_data.csv')
+```
+
+##Limit Data Set To Interesting Observations
+```{r}
+movies = movies.data
+movies$release_date = as.Date(movies$release_date)
+#Not Adult
+movies = movies[movies$adult == FALSE,]
+#Budget > 0
+movies = movies[movies$budget > 0,]
+#Revenue > 0
+movies = movies[movies$revenue > 0,]
+#At least 1 genre
+movies = movies[!is.null(movies$Genre_1),]
+movies = movies[movies$Genre_1 != '',]
+#English Movies
+movies = movies[movies$original_language == 'en',]
+#At least 1 genre
+movies = movies[!is.na(movies$Production_Company_1),]
+#Released since 1980
+movies = movies[movies$release_date >= as.Date('1980-01-01'),]
+#Movie has been released
+movies = movies[movies$status == 'Released',]
+#Theatrical Release
+movies = movies[movies$video == FALSE,]
+``` 
+
+## Genre Analysis
+```{r}
+library(reshape2)
+library(dplyr)
+movie.genre = melt(movies, id.vars= c('title','budget','revenue','profit'), measure.vars = 5:14 , na.rm=TRUE)
+
+#Summarize by Genre
+genre.summary = movie.genre %>%
+  group_by(value) %>%
+  summarise(mean_budget = mean(budget),
+            sd_budget = sd(budget),
+            median_budget = median(budget),
+            mean_revenue = mean(revenue),
+            sd_revenue = sd(revenue),
+            median_revenue = median(revenue),
+            mean_profit = mean(profit),
+            sd_profit = sd(profit),
+            median_profit = median(profit))
+
+#Histogram for each measure
+ggplot(movie.genre,aes(x=budget))+geom_histogram()
+ggplot(movie.genre,aes(x=revenue))+geom_histogram()
+ggplot(movie.genre,aes(x=profit))+geom_histogram()
+
+#Histograms for each genre
+ggplot(movie.genre,aes(x=profit))+geom_histogram()+facet_wrap(~value, nrow=5, ncol=4)
+
+#Take a closer look at some interesting genres
+ggplot(movie.genre[movie.genre$value == 'Drama',],aes(x=profit))+geom_histogram()
+ggplot(movie.genre[movie.genre$value == 'Comedy',],aes(x=profit))+geom_histogram()
+ggplot(movie.genre[movie.genre$value == 'Western',],aes(x=profit))+geom_histogram()
+ggplot(movie.genre[movie.genre$value == 'War',],aes(x=profit))+geom_histogram()
+ggplot(movie.genre[movie.genre$value == 'Music',],aes(x=profit))+geom_histogram()
+
+
+```
+
+## Production Company Analysis
+```{r}
+movie.prod = melt(movies, id.vars= c('title','budget','revenue','profit'), measure.vars = 23:49 , na.rm=TRUE)
+
+#Summarize by Genre
+prod.summary = movie.prod %>%
+  group_by(value) %>%
+  summarise(mean_budget = mean(budget),
+            sd_budget = sd(budget),
+            median_budget = median(budget),
+            mean_revenue = mean(revenue),
+            sd_revenue = sd(revenue),
+            median_revenue = median(revenue),
+            mean_profit = mean(profit),
+            sd_profit = sd(profit),
+            median_profit = median(profit))
+
+#Histogram for each measure
+ggplot(movie.prod,aes(x=budget))+geom_histogram()
+ggplot(movie.prod,aes(x=revenue))+geom_histogram()
+ggplot(movie.prod,aes(x=profit))+geom_histogram()
+
+
+```
