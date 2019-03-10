@@ -9,14 +9,19 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ##Load Data
 ```{r}
+library(reshape2)
+library(dplyr)
+library(ggplot2)
 movies.data = read.csv('../Data/Processed Data/movies_data.csv')
 credits.data = read.csv('../Data/Processed Data/credits_data.csv')
 ```
 
 ##Limit Data Set To Interesting Observations
 ```{r}
-movies = movies.data
+#Remove any potential duplicates
+movies = movies.data %>% distinct(movies.data$id, .keep_all = TRUE)
 movies$release_date = as.Date(movies$release_date)
+
 #Not Adult
 movies = movies[movies$adult == FALSE,]
 #Budget > 0
@@ -28,21 +33,93 @@ movies = movies[!is.null(movies$Genre_1),]
 movies = movies[movies$Genre_1 != '',]
 #English Movies
 movies = movies[movies$original_language == 'en',]
-#At least 1 genre
+#At least 1 production company
 movies = movies[!is.na(movies$Production_Company_1),]
-#Released since 1980
-movies = movies[movies$release_date >= as.Date('1980-01-01'),]
 #Movie has been released
 movies = movies[movies$status == 'Released',]
 #Theatrical Release
 movies = movies[movies$video == FALSE,]
+
+#Factor Engineering
+#Create master genre by combining first two listed genres
+movies$genre = paste(movies$Genre_1,movies$Genre_2)
+
 ``` 
 
+## Cast Information
+```{r}
+#Remove any potential duplicates
+credits = credits.data %>% distinct(credits.data$id, .keep_all = TRUE)
+movies = movies %>% distinct(movies$id, .keep_all = TRUE)
+
+movies.cast = merge(x = movies, y = credits, by = 'id', all.x = TRUE)
+movies.cast = movies.cast %>% distinct(movies.cast$id, .keep_all = TRUE)
+
+#Top Billed Actor
+movie.actors = melt(movies.cast, id.vars= c('title','budget','revenue','profit'), measure.vars = 110 , na.rm=TRUE)
+
+actors.summary = movie.actors %>%
+  group_by(value) %>%
+  summarise(mean_budget = mean(budget),
+            sd_budget = sd(budget),
+            median_budget = median(budget),
+            mean_revenue = mean(revenue),
+            sd_revenue = sd(revenue),
+            median_revenue = median(revenue),
+            mean_profit = mean(profit),
+            sd_profit = sd(profit),
+            median_profit = median(profit),
+            count = n())
+#Lead Actor
+ggplot(actors.summary[actors.summary$count >= 5,], aes(reorder(value, -mean_profit),mean_profit)) + geom_col()
+```
+
+## Director Information
+```{r}
+#Top 4 Billed Actors
+movie.director = melt(movies.cast, id.vars= c('title','budget','revenue','profit'), measure.vars = 121 , na.rm=TRUE)
+
+director.summary = movie.director %>%
+  group_by(value) %>%
+  summarise(mean_budget = mean(budget),
+            sd_budget = sd(budget),
+            median_budget = median(budget),
+            mean_revenue = mean(revenue),
+            sd_revenue = sd(revenue),
+            median_revenue = median(revenue),
+            mean_profit = mean(profit),
+            sd_profit = sd(profit),
+            median_profit = median(profit),
+            count = n())
+#Lead Actor
+ggplot(director.summary[actors.summary$count >= 10,], aes(reorder(value, -mean_profit),mean_profit)) + geom_col()
+```
 ## Genre Analysis
 ```{r}
-library(reshape2)
-library(dplyr)
-movie.genre = melt(movies, id.vars= c('title','budget','revenue','profit'), measure.vars = 5:14 , na.rm=TRUE)
+#Primary Genre Analysis
+movie.genre1 = melt(movies, id.vars= c('title','budget','revenue','profit'), measure.vars = 5 , na.rm=TRUE)
+#Summarize by Genre
+genre1.summary = movie.genre1 %>%
+  group_by(value) %>%
+  summarise(mean_budget = mean(budget),
+            sd_budget = sd(budget),
+            median_budget = median(budget),
+            mean_revenue = mean(revenue),
+            sd_revenue = sd(revenue),
+            median_revenue = median(revenue),
+            mean_profit = mean(profit),
+            sd_profit = sd(profit),
+            median_profit = median(profit))
+#By genre1 analysis
+ggplot(movie.genre1,aes(value , profit)) +
+  geom_boxplot()+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+```{r}
+#Paired Genre
+movie.genre = melt(movies, id.vars= c('title','budget','revenue','profit', 'Genre_1'), measure.vars = 107 , na.rm=TRUE)
 
 #Summarize by Genre
 genre.summary = movie.genre %>%
@@ -57,27 +134,33 @@ genre.summary = movie.genre %>%
             sd_profit = sd(profit),
             median_profit = median(profit))
 
-#Histogram for each measure
-ggplot(movie.genre,aes(x=budget))+geom_histogram()
-ggplot(movie.genre,aes(x=revenue))+geom_histogram()
-ggplot(movie.genre,aes(x=profit))+geom_histogram()
-
-#Histograms for each genre
-ggplot(movie.genre,aes(x=profit))+geom_histogram()+facet_wrap(~value, nrow=5, ncol=4)
-
-#Take a closer look at some interesting genres
-ggplot(movie.genre[movie.genre$value == 'Drama',],aes(x=profit))+geom_histogram()
-ggplot(movie.genre[movie.genre$value == 'Comedy',],aes(x=profit))+geom_histogram()
-ggplot(movie.genre[movie.genre$value == 'Western',],aes(x=profit))+geom_histogram()
-ggplot(movie.genre[movie.genre$value == 'War',],aes(x=profit))+geom_histogram()
-ggplot(movie.genre[movie.genre$value == 'Music',],aes(x=profit))+geom_histogram()
+#By genre analysis
+ggplot(movie.genre,aes(value , profit)) +
+  geom_boxplot()+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+#Action
+ggplot(movie.genre[movie.genre$Genre_1 == 'Action',],aes(value , profit)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+#Animation
+ggplot(movie.genre[movie.genre$Genre_1 == 'Animation',],aes(value , profit)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+#Drama
+ggplot(movie.genre[movie.genre$Genre_1 == 'Comedy',],aes(value , profit)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+#Comedy
+ggplot(movie.genre[movie.genre$Genre_1 == 'Drama',],aes(value , profit)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
 
 ```
 
 ## Production Company Analysis
 ```{r}
-movie.prod = melt(movies, id.vars= c('title','budget','revenue','profit'), measure.vars = 23:49 , na.rm=TRUE)
+movie.prod = melt(movies, id.vars= c('title','budget','revenue','profit'), measure.vars = 23 , na.rm=TRUE)
 
 #Summarize by Genre
 prod.summary = movie.prod %>%
@@ -90,12 +173,59 @@ prod.summary = movie.prod %>%
             median_revenue = median(revenue),
             mean_profit = mean(profit),
             sd_profit = sd(profit),
-            median_profit = median(profit))
+            median_profit = median(profit),
+            count = n())
 
-#Histogram for each measure
-ggplot(movie.prod,aes(x=budget))+geom_histogram()
-ggplot(movie.prod,aes(x=revenue))+geom_histogram()
-ggplot(movie.prod,aes(x=profit))+geom_histogram()
+#By prod company analysis
+movie.prod = merge(x=movie.prod, y=prod.summary, by.x='value', by.y = 'value')
+ggplot(movie.prod[movie.prod$count >= 25 & movie.prod$value != '',],aes(reorder(value, -count) , profit)) +
+  geom_boxplot()+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
 
+```{r}
+#xgboost model
+require(xgboost)
+#subset data
+train = movies[movies$release_date < '2010-01-01',]
+test = movies[movies$release_date >= '2010-01-01',]
+
+train.y = train$profit
+
+train$belongs_to_collection = as.numeric(as.factor(train$belongs_to_collection))
+train$Genre_1 = as.numeric(as.factor(train$Genre_1))
+train$genre = as.numeric(as.factor(train$genre))
+train$Production_Company_1 = as.numeric(as.factor(train$Production_Company_1))
+train.x = as.matrix(train$belongs_to_collection,
+                      train$budget,
+                      train$Genre_1,
+                      train$genre,
+                      train$Production_Company_1, 
+                      train$release_date)
+train = xgb.DMatrix(label = train.y, data = as.matrix(train.x))
+
+test.y = test$profit
+
+test$belongs_to_collection = as.numeric(as.factor(test$belongs_to_collection))
+test$Genre_1 = as.numeric(as.factor(test$Genre_1))
+test$genre = as.numeric(as.factor(test$genre))
+test$Production_Company_1 = as.numeric(as.factor(test$Production_Company_1))
+test.x = as.matrix(test$belongs_to_collection,
+                      test$budget,
+                      test$Genre_1,
+                      test$genre,
+                      test$Production_Company_1, 
+                      test$release_date)
+test = xgb.DMatrix(label = test.y, data = as.matrix(test.x))
+
+model.xgb = xgboost(data = train,
+                    max.depth = 8,
+                    eta = 1,
+                    nthread = 2,
+                    nrounds = 50,
+                    objective = "reg:linear",
+                    verbose = 2)
+
+pred = predict(model.xgb, test)
 
 ```

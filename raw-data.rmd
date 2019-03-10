@@ -63,7 +63,6 @@ movies.data$genres = as.character(movies.data$genres)
 movies.data$release_date = ymd(movies.data$release_date)
 movies.data$revenue = as.numeric(movies.data$revenue)
 movies.data$budget = as.numeric(levels(movies.data$budget))[movies.data$budget]
-movies.data$genres = as.character(movies.data$genres)
 
 #Transform Genres into Lists
 movies.data$genres = gsub("\\[|\\]","",movies.data$genres)
