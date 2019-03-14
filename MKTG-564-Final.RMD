@@ -14,6 +14,13 @@ library(dplyr)
 library(ggplot2)
 library(scales)
 library(reshape2)
+library(xgboost)
+library(Matrix)
+library(caret)
+library(DiagrammeR)
+library(broom)
+library(knitr)
+library(corrplot)
 ```
 
 # Executive Summary
@@ -29,7 +36,7 @@ library(reshape2)
 
 ## Movies Metadata
 ```{r}
-# Define the columns in the movies_metada dataset
+# Define the columns in the movies_metadata dataset
 movies = read.csv('../Data/movies_metadata.csv')
 colnames(movies)
 ```
@@ -63,7 +70,7 @@ colnames(movies)
 |vote_count|Numeric|Number of votes from IMDB users|
 
 ### Format and Clean and Factor Engineer Movies Metadata
-```{r}
+```{r, message=FALSE}
 # Create a dataset for manipulation
 movies.data = movies
 
@@ -121,7 +128,7 @@ colnames(credits)
 |id|int|IMDB id for linking to other data|
 
 ### Format and Clean Up Credits Data
-```{r}
+```{r, message=FALSE}
 # Create A Data Set for Manipulation
 credits.data = credits
 
@@ -159,6 +166,7 @@ credits.data = credits.data %>% mutate_all(funs(empty_as_na))
 
 ## Descriptive Statistics
 Descriptions of the entire data set to determine interesting factors and relevant data for further analysis. First we remove movies that are irrelevant to our study (films that are in production, adult films, direct to video) or are missing important factors (no budget or revenue information, foreign films etc). From our original 45,476 movies, 4,786 remain. In order to make the data easier to analyze we will also combine the Movies and Credits datasets. At this time, movie profit is calculated as revenue-budget.
+
 ```{r}
 # Format Data As Necessary
 movies.data$belongs_to_collection = as.factor(movies.data$belongs_to_collection)
@@ -191,6 +199,16 @@ movies.cast = merge(x = movies.data, y = credits.data, by = 'id', all.x = TRUE)
 movies.cast$profit = movies.cast$revenue - movies.cast$budget
 ```
 
+### Correlations
+
+```{r}
+movies.data$popularity = as.numeric(movies.data$popularity)
+# 3 Budget, 76 Revenue, 77 Runtime, 102 Vote Average, 103 Vote Count, 20 Popularity
+corrplot(cor(movies.data[ , c(3, 76, 77, 102, 103, 20)]), order="hclust")
+```
+
+ANALYSIS OF CORRELATIONS
+
 ### Profitability
 
 ```{r}
@@ -222,8 +240,11 @@ ggplot(data=movies.cast, aes(x=budget/1000000,y=profit/1000000)) + geom_point() 
   scale_y_continuous(label=comma)
 
 ```
-FILL WITH ANALYSIS OF PROBABILITY IN DATASET
+
+FILL WITH ANALYSIS OF PROFITABILITY IN DATASET
+
 ### Genres
+
 ```{r}
 # Primary Genre analysis
 movie.genre1 = melt(movies.data, id.vars = c('title','budget','revenue','profit'), measure.vars=5, na.rm=TRUE)
@@ -264,15 +285,16 @@ genre.summary = movie.genre %>%
             median_profit = median(profit))
 
 #By paired genre analysis
-ggplot(movie.genre[movie.genre$Genre_1 == c('Action','War','Comedy'),],aes(value , profit/1000000)) +
+ggplot(movie.genre[movie.genre$Genre_1 == c('Animation'),],aes(value , profit/1000000)) +
   geom_boxplot()+
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) + facet_grid(rows=vars(Genre_1)) +
-  labs(title='Profit by Paired Genre', y='Profit in Millions', x='paired Genre')
+  labs(title='Profit by Paired Genre', y='Profit in Millions', x='Paired Genre')
 ```
 
 FILL WITH ANALYSIS OF GENRE FACTORS
 
 ## Primary Production Company Description
+
 ```{r}
 movie.prod = melt(movies.data, id.vars= c('title','budget','revenue','profit'), measure.vars = 22 , na.rm=TRUE)
 
@@ -299,8 +321,10 @@ ggplot(movie.prod[movie.prod$count >= 30 & movie.prod$value != '',],aes(reorder(
   scale_y_continuous(label=comma)
 ```
 
+FILL WITH PRODUCTION COMPANY ANALYSIS
 
 ## Cast Information
+
 ```{r}
 
 #Top Billed Actor
@@ -327,3 +351,125 @@ ggplot(actors.summary[actors.summary$count >= 20,], aes(reorder(value, -count),m
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   labs(title='Actors in More than 20 Films',x='Actor (Ordered by Appearances)', y='Average Profit')
 ```
+
+FILL WITH CAST ANALYSIS
+
+## Director Information
+
+```{r}
+#Top Billed Director
+movie.director = melt(movies.cast, id.vars= c('title','budget','revenue','profit','release_date'), measure.vars = 116 , na.rm=TRUE)
+
+# Remove actors who haven't been cast since 2000
+movie.director = movie.director[movie.director$release_date>='2000-01-01',]
+
+director.summary = movie.director %>%
+  group_by(value) %>%
+  summarise(mean_budget = mean(budget),
+            sd_budget = sd(budget),
+            median_budget = median(budget),
+            mean_revenue = mean(revenue),
+            sd_revenue = sd(revenue),
+            median_revenue = median(revenue),
+            mean_profit = mean(profit),
+            sd_profit = sd(profit),
+            median_profit = median(profit),
+            count = n())
+#Director of more than 10 films
+ggplot(director.summary[director.summary$count >= 8,], aes(reorder(value, -count),mean_profit/1000000)) +
+  geom_point() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust=0.5)) +
+  labs(title='Director of More than 8 Films',x='Actor (Ordered by Credited Movies)', y='Average Profit')
+```
+
+FILL WITH DIRECTOR ANALYSIS
+
+### Tests of Significance
+```{r}
+genre_1.ANOVA = aov(profit ~ Genre_1, data=movies.cast)
+
+kable(tidy(genre_1.ANOVA))
+
+kable(head(tidy(
+  TukeyHSD(genre_1.ANOVA)
+),10))
+
+paired_genre.ANOVA = aov(profit ~ genre, data=movies.data)
+summary(paired_genre.ANOVA)
+
+movies.data$collection_flag = ifelse(movies.data$belongs_to_collection=='',0,1)
+collection.ANOVA = aov(profit ~ collection_flag, data=movies.data)
+summary(collection.ANOVA)
+
+specific_collection.ANOVA = aov(profit ~ belongs_to_collection, data=movies.data)
+summary(specific_collection.ANOVA)
+
+production_co.ANOVA = aov(profit ~ Production_Company_1, data=movies.data)
+summary(production_co.ANOVA)
+```
+
+These ANOVA tests show that there is a significant variation among at least some of the groups. For example, we can see that the Adventure and Action genres have significantly differen mean profits, but there is not a significant difference between Documentary and Action movies, likely due to the low volume of Documentary films in the dataset.
+
+### Forecasting Profit Using XGBoost
+In order to forecast the profitability of a movie, we attempted to build an XGBoost model. The categorical variables were encoded as dummy variables in order to work with the "xgboost" package. The data set was split randomly on the last digit of the IMDB ID found in the dataset. 80% of the observations were used for training, and the remaining 20% for testing.
+```{r}
+
+data = movies.data
+data$release_date = year(data$release_date)
+ohe_feats = c('belongs_to_collection','Genre_1','Production_Company_1','genre')
+
+dummies = dummyVars("~ belongs_to_collection + Genre_1 + genre + Production_Company_1", data=data)
+data_ohe = as.data.frame(predict(dummies, newdata = data))
+data_all = cbind(data[,-c(which(colnames(data) %in% ohe_feats))], data_ohe)
+
+#Split into 80% Training and 20% Testing Data
+train = data_all[str_sub(data$id,-1, -1) > 1,]
+test = data_all[str_sub(data$id,-1, -1) <= 1,]
+
+#2 Budget, 72 release date, 102 collection flag, 103-3050 Collection+Genre1+Production+Genre1Genre2 dummies
+cols.xgmodel = c(2,72,102:3050)
+
+train.y = train$profit
+train.x = data.matrix(train[,cols.xgmodel])
+
+
+xgb.model = xgboost(data=train.x,
+                    label=train.y,
+                  eta = 0.1,
+                  max_depth = 6, 
+                  nround=1000, 
+                  subsample = 1,
+                  colsample_bytree = 1,
+                  num_class = 1,
+                  min_child_weight = 5,
+                  gamma = 5,
+                  nthread = 30,
+                  objective = "reg:linear",
+                  eval_metric = 'rmse',
+                  verbose = 0)
+
+pred = (predict(xgb.model, data.matrix(test[,cols.xgmodel])))
+error = mean((as.numeric(pred) - test$profit))/mean(test$profit)
+mean_pred = mean(as.numeric(pred))
+cat('Error Rate:',error)
+
+#Show  Factor Importance
+#xgb.plot.tree(model=xgb.model, trees=0, show_node_id = TRUE)
+features = xgb.importance(model=xgb.model)
+xgb.plot.importance(importance_matrix = head(features,10))
+
+# Observe The Model On Test Data
+test$pred = (predict(xgb.model, data.matrix(test[,cols.xgmodel])))
+test_graphs = c('title','release_date','profit','pred')
+test_results = test[test_graphs]
+test_results$error = (test_results$profit-test_results$pred)/test_results$pred
+test_results = test_results[order(test_results$error),]
+ggplot(data=test_results, aes(x=pred/1000000, y=profit/1000000)) +
+  geom_point() +
+  geom_abline() +
+  labs(title='Actual v Predicted Profit', x='Predicted Profit in Millions', y='Actual Profit in Millions') +
+  scale_x_continuous(label=comma) +
+  scale_y_continuous(label=comma)
+```
+
+While the models overall -8.9% accuracy seems great, things aren't as rosy when we dig in. The overall accuracy is a function of the dispersion of the data set. Some movies had far more profit than predicted, and some movies had a lot less! This model is perhaps helpful for giving general ideas about what movies to make, how much to spend, and who should make them, but doesn't give quite enough information to be the soul source of decision making information.
